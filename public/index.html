@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campus Library — GraphQL & MySQL Catalog</title>
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Application Stylesheet with Cache-Buster v5 -->
+  <link rel="stylesheet" href="style.css?v=20261027_v5">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header>
+      <nav class="navbar" aria-label="Main Navigation">
+        <div class="brand-wrapper">
+          <div class="brand-icon" aria-hidden="true" title="CS543 Campus Library">🏛️</div>
+          <div>
+            <div style="display:flex; align-items:center; gap:0.55rem;">
+              <span class="brand-title">Campus Library</span>
+              <span class="brand-badge">GraphQL API</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-actions">
+          <!-- Live API Status Indicator -->
+          <div id="statusBadge" class="status-badge" title="Connection status to GraphQL Apollo Server on port 4000">
+            <span class="status-dot"></span>
+            <span id="statusText">Checking API...</span>
+          </div>
+
+          <!-- Dark / Light Theme Switcher Button -->
+          <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="Toggle Dark and Light Mode" title="Toggle Theme">
+            ☀️
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Hero Title & Architecture Description -->
+    <section class="hero-section">
+      <h1 class="hero-headline">
+        Authors &amp; <span>Cataloged Books</span>
+      </h1>
+      <p class="hero-sub">
+        Explore university authors and their publications. Three-tier decoupled architecture powered by GraphQL, Apollo Server resolvers, and MySQL.
+      </p>
+    </section>
+
+    <!-- Global Error Alert Container -->
+    <div id="errorContainer" style="display: none;"></div>
+
+    <!-- Live Statistics Cards -->
+    <section class="stats-grid" aria-label="Library Summary Statistics">
+      <div class="stat-card authors">
+        <div class="stat-icon" aria-hidden="true">✍️</div>
+        <div class="stat-info">
+          <span class="stat-label">Total Authors</span>
+          <span class="stat-value" id="statAuthors">-</span>
+        </div>
+      </div>
+      <div class="stat-card books">
+        <div class="stat-icon" aria-hidden="true">📚</div>
+        <div class="stat-info">
+          <span class="stat-label">Cataloged Books</span>
+          <span class="stat-value" id="statBooks">-</span>
+        </div>
+      </div>
+      <div class="stat-card latest">
+        <div class="stat-icon" aria-hidden="true">🌟</div>
+        <div class="stat-info">
+          <span class="stat-label">Latest Publication</span>
+          <span class="stat-value" id="statLatestYear">-</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Dashboard Grid Layout (2-Column) -->
+    <div class="dashboard-grid">
+      
+      <!-- Left Column: Catalog & Author Cards -->
+      <main class="catalog-column">
+        <!-- Controls: Search Input & Refresh Button -->
+        <div class="controls-bar">
+          <div class="search-wrapper">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input 
+              type="search" 
+              id="searchInput" 
+              class="search-input" 
+              placeholder="Search author name, country, or book title..." 
+              aria-label="Search catalog"
+            >
+          </div>
+          <button id="refreshBtn" class="refresh-btn" type="button" title="Refetch library data via GraphQL">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <!-- Target Container for Authors & Nested Books -->
+        <div id="list">
+          <div class="state-container">
+            <div class="spinner" aria-hidden="true"></div>
+            <p>Loading catalog from GraphQL API&hellip;</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Column: Interactive Add Book Sidebar & Architecture Flow -->
+      <aside class="sidebar-column">
+        
+        <!-- Add a Book Form Card -->
+        <form id="addForm" novalidate>
+          <div class="form-header">
+            <h3><span>📖</span> Add a Book</h3>
+            <button 
+              type="button" 
+              id="fillDemoBtn" 
+              class="quick-demo-pill" 
+              title="Populate tutorial sample book"
+            >
+              + Quick Demo
+            </button>
+          </div>
+
+          <div class="form-fields">
+            <!-- Book Title Field -->
+            <div class="form-group">
+              <label for="title">
+                Book Title <span class="required-star">*</span>
+              </label>
+              <input 
+                id="title" 
+                type="text" 
+                placeholder="e.g. GraphQL for Beginners" 
+                required 
+                autocomplete="off"
+              >
+              <span id="titleError" class="field-error" aria-live="polite"></span>
+            </div>
+
+            <!-- Publication Year Field -->
+            <div class="form-group">
+              <label for="year">Publication Year</label>
+              <input 
+                id="year" 
+                type="number" 
+                placeholder="e.g. 2025" 
+                min="1000" 
+                max="2100"
+              >
+              <span id="yearError" class="field-error" aria-live="polite"></span>
+            </div>
+
+            <!-- Author Dropdown Field -->
+            <div class="form-group">
+              <label for="authorId">
+                Author <span class="required-star">*</span>
+              </label>
+              <select id="authorId" required>
+                <option value="" disabled selected>Select an author...</option>
+              </select>
+              <span id="authorError" class="field-error" aria-live="polite"></span>
+            </div>
+
+            <!-- Submit Button -->
+            <button id="submitBtn" type="submit">
+              <span id="submitSpinner" class="spinner" style="display:none; width:16px; height:16px; margin:0; border-width:2px;"></span>
+              <span id="submitBtnText">Add Book to Catalog</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- System Architecture Visualizer Card -->
+        <div class="arch-card" aria-label="Architecture Data Flow">
+          <h4><span>⚡</span> Data Flow Pipeline</h4>
+          <div class="pipeline-list">
+            <div class="pipeline-step">
+              <span class="node-tag node-browser">Browser</span>
+              <span>HTML5 + Native fetch()</span>
+            </div>
+            <div class="pipeline-arrow">↓ HTTP POST :4000/</div>
+            <div class="pipeline-step">
+              <span class="node-tag node-graphql">GraphQL API</span>
+              <span>Schema &amp; SDL TypeDefs</span>
+            </div>
+            <div class="pipeline-arrow">↓ Execute Resolvers</div>
+            <div class="pipeline-step">
+              <span class="node-tag node-apollo">Apollo Server</span>
+              <span>Parameterized Queries</span>
+            </div>
+            <div class="pipeline-arrow">↓ SQL Connection Pool</div>
+            <div class="pipeline-step">
+              <span class="node-tag node-mysql">MySQL</span>
+              <span>Database: gqldemo</span>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Client-Side JavaScript Logic -->
+  <script>
+    // -------------------------------------------------------------------------
+    // Configuration & State
+    // -------------------------------------------------------------------------
+    const API = 'http://localhost:4000/';
+    let cachedAuthors = [];
+
+    // DOM Elements
+    const listEl = document.getElementById('list');
+    const formEl = document.getElementById('addForm');
+    const titleInput = document.getElementById('title');
+    const yearInput = document.getElementById('year');
+    const authorSelect = document.getElementById('authorId');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitBtnText = document.getElementById('submitBtnText');
+    const submitSpinner = document.getElementById('submitSpinner');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const searchInput = document.getElementById('searchInput');
+    const fillDemoBtn = document.getElementById('fillDemoBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const errorContainer = document.getElementById('errorContainer');
+    const toastContainer = document.getElementById('toastContainer');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    
+    // Stats Elements
+    const statAuthors = document.getElementById('statAuthors');
+    const statBooks = document.getElementById('statBooks');
+    const statLatestYear = document.getElementById('statLatestYear');
+
+    // -------------------------------------------------------------------------
+    // Theme Switcher (Dark & Light Mode Toggle)
+    // -------------------------------------------------------------------------
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('library-theme', theme);
+      themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+      themeToggleBtn.title = `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`;
+    }
+
+    const savedTheme = localStorage.getItem('library-theme') || 'dark';
+    setTheme(savedTheme);
+
+    themeToggleBtn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    // -------------------------------------------------------------------------
+    // Helper: Execute GraphQL Query/Mutation via HTTP POST fetch()
+    // -------------------------------------------------------------------------
+    async function gql(query, variables = {}) {
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        const json = await res.json();
+
+        if (json.errors && json.errors.length > 0) {
+          throw new Error(json.errors[0].message);
+        }
+
+        updateStatus(true);
+        return json.data;
+      } catch (err) {
+        updateStatus(false);
+        throw err;
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Status Badge Updater
+    // -------------------------------------------------------------------------
+    function updateStatus(isOnline) {
+      if (isOnline) {
+        statusBadge.className = 'status-badge connected';
+        statusText.textContent = 'API Connected (:4000)';
+        hideGlobalError();
+      } else {
+        statusBadge.className = 'status-badge error';
+        statusText.textContent = 'API Offline';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Toast Notification System
+    // -------------------------------------------------------------------------
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span> <span>${message}</span>`;
+      toastContainer.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+        setTimeout(() => toast.remove(), 400);
+      }, 4000);
+    }
+
+    // -------------------------------------------------------------------------
+    // Error Handling Displays
+    // -------------------------------------------------------------------------
+    function showGlobalError(title, detail) {
+      errorContainer.innerHTML = `
+        <div class="error-banner">
+          <h4>⚠️ ${title}</h4>
+          <p>${detail}</p>
+          <div class="retry-action">
+            <button class="retry-btn" onclick="load()">Retry Connection</button>
+          </div>
+        </div>
+      `;
+      errorContainer.style.display = 'block';
+    }
+
+    function hideGlobalError() {
+      errorContainer.style.display = 'none';
+      errorContainer.innerHTML = '';
+    }
+
+    // -------------------------------------------------------------------------
+    // Update Stats Chips
+    // -------------------------------------------------------------------------
+    function updateStats(authors) {
+      statAuthors.textContent = authors.length;
+      let totalBooks = 0;
+      let maxYear = 0;
+
+      authors.forEach(author => {
+        if (author.books && Array.isArray(author.books)) {
+          totalBooks += author.books.length;
+          author.books.forEach(b => {
+            if (b.year && b.year > maxYear) maxYear = b.year;
+          });
+        }
+      });
+
+      statBooks.textContent = totalBooks;
+      statLatestYear.textContent = maxYear > 0 ? maxYear : 'N/A';
+    }
+
+    // -------------------------------------------------------------------------
+    // Sync Author Dropdown Dynamically with GraphQL Data
+    // -------------------------------------------------------------------------
+    function populateAuthorSelect(authors) {
+      const currentSelected = authorSelect.value;
+      authorSelect.innerHTML = '<option value="" disabled selected>Select an author...</option>';
+      
+      authors.forEach(author => {
+        const opt = document.createElement('option');
+        opt.value = author.id;
+        opt.textContent = `${author.name}${author.country ? ` (${author.country})` : ''}`;
+        authorSelect.appendChild(opt);
+      });
+
+      if (currentSelected && authors.some(a => String(a.id) === String(currentSelected))) {
+        authorSelect.value = currentSelected;
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Helper: Compute Monogram Initials
+    // -------------------------------------------------------------------------
+    function getInitials(name) {
+      if (!name) return '??';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. READ: Load all authors with their books via GraphQL
+    // -------------------------------------------------------------------------
+    async function load(retryCount = 0) {
+      refreshBtn.classList.add('spinning');
+      try {
+        const data = await gql(`
+          query GetAuthorsAndBooks {
+            authors {
+              id
+              name
+              country
+              books {
+                title
+                year
+              }
+            }
+          }
+        `);
+
+        cachedAuthors = data.authors || [];
+        populateAuthorSelect(cachedAuthors);
+        updateStats(cachedAuthors);
+        renderAuthors(cachedAuthors);
+      } catch (err) {
+        console.error('Failed to load library:', err);
+        // Automatically retry up to 2 times on initial startup if API is spinning up
+        if (retryCount < 2) {
+          statusBadge.className = 'status-badge';
+          statusText.textContent = 'Connecting to API...';
+          setTimeout(() => load(retryCount + 1), 1200);
+          return;
+        }
+
+        listEl.innerHTML = `
+          <div class="state-container">
+            <p style="color:#ef4444; font-weight:700; margin-bottom:0.5rem; font-size:1.05rem;">
+              Unable to connect to the GraphQL API.
+            </p>
+            <p style="font-size:0.92rem; color:var(--text-muted);">
+              Make sure the Node.js server is running on port 4000.<br>
+              <code style="display:inline-block; margin-top:0.5rem; padding:0.2rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:4px;">node server.js</code>
+            </p>
+            <div style="margin-top:1.25rem;">
+              <button class="retry-btn" onclick="load(2)">Try Again</button>
+            </div>
+          </div>
+        `;
+        showGlobalError(
+          'Unable to connect to the GraphQL API',
+          'Make sure the Node.js server is running on port 4000 and MySQL is active.'
+        );
+      } finally {
+        refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Render Authors and Books into Modern Cards
+    // -------------------------------------------------------------------------
+    function renderAuthors(authorsToRender) {
+      if (!authorsToRender || authorsToRender.length === 0) {
+        listEl.innerHTML = `
+          <div class="state-container">
+            <p>No authors found matching your criteria.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = authorsToRender.map((a, index) => {
+        const initials = getInitials(a.name);
+        const bookCount = a.books ? a.books.length : 0;
+
+        return `
+          <article class="author-card" data-author-id="${a.id}" style="--card-index: ${index};">
+            <div class="card-header">
+              <div class="author-profile">
+                <div class="author-avatar" aria-hidden="true">${initials}</div>
+                <div class="author-meta">
+                  <h2>${escapeHtml(a.name)}</h2>
+                  <div class="author-badges" style="margin-top:0.25rem;">
+                    ${a.country ? `<span class="country-pill">📍 ${escapeHtml(a.country)}</span>` : ''}
+                    <span class="id-chip">#ID ${a.id}</span>
+                    <span class="id-chip">${bookCount} book${bookCount === 1 ? '' : 's'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="books-wrapper">
+              ${a.books && a.books.length > 0
+                ? a.books.map(b => `
+                    <div class="book">
+                      <div class="book-title-group">
+                        <span class="book-icon" aria-hidden="true">📘</span>
+                        <span class="book-title">${escapeHtml(b.title)}</span>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:0.6rem;">
+                        <span class="yr">${b.year ? `📅 ${b.year}` : 'Year N/A'}</span>
+                        <span class="book-arrow" aria-hidden="true">→</span>
+                      </div>
+                    </div>
+                  `).join('')
+                : `<div class="no-books">No books cataloged for this author yet.</div>`
+              }
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    // Helper to prevent XSS
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // -------------------------------------------------------------------------
+    // Search / Filter Logic
+    // -------------------------------------------------------------------------
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!q) {
+        renderAuthors(cachedAuthors);
+        return;
+      }
+
+      const filtered = cachedAuthors.filter(a => {
+        const matchesAuthor = a.name.toLowerCase().includes(q) || (a.country && a.country.toLowerCase().includes(q));
+        const matchesBook = a.books && a.books.some(b => b.title.toLowerCase().includes(q) || String(b.year).includes(q));
+        return matchesAuthor || matchesBook;
+      });
+
+      renderAuthors(filtered);
+    });
+
+    // -------------------------------------------------------------------------
+    // Quick Demo Preset Filler
+    // -------------------------------------------------------------------------
+    fillDemoBtn.addEventListener('click', () => {
+      titleInput.value = 'GraphQL for Beginners';
+      yearInput.value = '2025';
+      
+      const raviOption = Array.from(authorSelect.options).find(o => o.text.includes('Ravi Kumar'));
+      if (raviOption) {
+        authorSelect.value = raviOption.value;
+      } else if (authorSelect.options.length > 1) {
+        authorSelect.selectedIndex = 1;
+      }
+
+      titleInput.focus();
+      showToast('Sample data populated for demo!', 'info');
+    });
+
+    // -------------------------------------------------------------------------
+    // 2. WRITE: Add a Book via GraphQL Mutation
+    // -------------------------------------------------------------------------
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      document.getElementById('titleError').textContent = '';
+      document.getElementById('yearError').textContent = '';
+      document.getElementById('authorError').textContent = '';
+      titleInput.classList.remove('is-invalid');
+      yearInput.classList.remove('is-invalid');
+      authorSelect.classList.remove('is-invalid');
+
+      const rawTitle = titleInput.value.trim();
+      const rawYear = yearInput.value.trim();
+      const authorId = authorSelect.value;
+      let hasError = false;
+
+      if (!rawTitle) {
+        document.getElementById('titleError').textContent = 'Please enter a book title.';
+        titleInput.classList.add('is-invalid');
+        hasError = true;
+      }
+
+      let year = null;
+      if (rawYear !== '') {
+        year = Number(rawYear);
+        if (isNaN(year) || !Number.isInteger(year) || year < 1000 || year > 2100) {
+          document.getElementById('yearError').textContent = 'Enter a valid year between 1000 and 2100.';
+          yearInput.classList.add('is-invalid');
+          hasError = true;
+        }
+      }
+
+      if (!authorId) {
+        document.getElementById('authorError').textContent = 'Please select an author.';
+        authorSelect.classList.add('is-invalid');
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      submitBtn.disabled = true;
+      submitBtnText.textContent = 'Adding to Catalog…';
+      submitSpinner.style.display = 'inline-block';
+
+      try {
+        const mutation = `
+          mutation AddBook($title: String!, $year: Int, $authorId: ID!) {
+            addBook(title: $title, year: $year, authorId: $authorId) {
+              id
+              title
+              year
+              author {
+                id
+                name
+              }
+            }
+          }
+        `;
+
+        const data = await gql(mutation, {
+          title: rawTitle,
+          year: year,
+          authorId: authorId,
+        });
+
+        formEl.reset();
+        await load();
+        showToast(`Book "${data.addBook.title}" successfully added!`, 'success');
+      } catch (err) {
+        console.error('Mutation error:', err);
+        showToast(err.message || 'Failed to add book.', 'error');
+        showGlobalError('Error Adding Book', err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtnText.textContent = 'Add Book to Catalog';
+        submitSpinner.style.display = 'none';
+      }
+    });
+
+    refreshBtn.addEventListener('click', () => load());
+
+    // Initial load on page startup
+    load();
+  </script>
+</body>
+</html>

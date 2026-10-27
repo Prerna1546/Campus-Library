@@ -1,5 +1,3 @@
-// db.js -- one shared connection pool to MySQL
-// Loads configuration securely from .env without hardcoding sensitive credentials
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
